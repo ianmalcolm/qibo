@@ -1574,13 +1574,33 @@ class FusedGate(Gate):
     def is_special(self):
         return isinstance(self.gates[0], SpecialGate)
 
-    def add(self, gate):
-        if isinstance(gate, self.__class__):
-            self.gates.extend(gate.gates)
-            self.qubit_set |= gate.qubit_set
+    def fuse(self, queue, max_qubits, reverse=False):
+        assert not self.is_special()
+        if reverse:
+            queue = reversed(queue)
+
+        rqueue = []
+        for gate in queue:
+            can_fuse = (len(gate.qubit_set | self.qubit_set) <= max_qubits
+                        and not gate.is_special())
+            if can_fuse:
+                for rgate in rqueue:
+                    if not gate.commutes(rgate):
+                        can_fuse = False
+                        break
+            if can_fuse:
+                self.qubit_set |= gate.qubit_set
+                if reverse:
+                    self.gates = gate.gates + self.gates
+                else:
+                    self.gates.extend(gate.gates)
+            else:
+                rqueue.append(gate)
+
+        if reverse:
+            return rqueue[::-1]
         else:
-            self.gates.append(gate)
-            self.qubit_set |= set(gate.qubits)
+            return rqueue
 
     def __iter__(self):
         return iter(self.gates)

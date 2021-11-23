@@ -26,15 +26,26 @@ def test_two_fusion_gate(max_qubits):
              gates.H(0)]
     c = Circuit(3)
     c.add(queue)
+    print(c.draw())
     c = c.fuse(max_qubits)
+
+    for fgate in c.queue:
+        if isinstance(fgate, gates.FusedGate):
+            for gate in fgate:
+                print(gate.name, gate.qubits)
+        else:
+            print(fgate.name, fgate.qubits)
+        print()
+
     if max_qubits > 2:
         assert len(c.queue) == 1
-        assert list(c.queue[0]) == queue
+        assert list(c.queue[0]) == [queue[0], queue[5], queue[1], queue[2],
+                                    queue[3], queue[4]]
     else:
         assert len(c.queue) == 2
         gate1, gate2 = c.queue
-        assert gate1.gates == [queue[0], queue[1], queue[5]]
-        assert gate2.gates == [queue[2], queue[3], queue[4]]
+        assert gate1.gates == [queue[0], queue[5]]
+        assert gate2.gates == [queue[1], queue[2], queue[3], queue[4]]
 
 
 def test_fusedgate_matrix_calculation(backend):
@@ -67,8 +78,7 @@ def test_fuse_circuit_two_qubit_gates(backend):
 
 
 @pytest.mark.parametrize("max_qubits", [2, 3, 4])
-@pytest.mark.parametrize("multiqubit_first", [False, True])
-def test_fuse_circuit_three_qubit_gate(backend, max_qubits, multiqubit_first):
+def test_fuse_circuit_three_qubit_gate(backend, max_qubits):
     """Check circuit fusion in circuit with three-qubit gate."""
     c = Circuit(4)
     c.add((gates.H(i) for i in range(4)))
@@ -79,7 +89,7 @@ def test_fuse_circuit_three_qubit_gate(backend, max_qubits, multiqubit_first):
     c.add((gates.H(i) for i in range(4)))
     c.add(gates.CNOT(0, 1))
     c.add(gates.CZ(2, 3))
-    fused_c = c.fuse(max_qubits, multiqubit_first)
+    fused_c = c.fuse(max_qubits)
     if K.name == "qibotf" and max_qubits > 2:
         # ``qibotf`` does not support multi qubit gates
         with pytest.raises(NotImplementedError):
@@ -91,8 +101,7 @@ def test_fuse_circuit_three_qubit_gate(backend, max_qubits, multiqubit_first):
 @pytest.mark.parametrize("nqubits", [4, 5, 10, 11])
 @pytest.mark.parametrize("nlayers", [1, 2])
 @pytest.mark.parametrize("max_qubits", [2, 3, 4, 5])
-@pytest.mark.parametrize("multiqubit_first", [False, True])
-def test_variational_layer_fusion(backend, nqubits, nlayers, max_qubits, multiqubit_first):
+def test_variational_layer_fusion(backend, nqubits, nlayers, max_qubits):
     """Check fused variational layer execution."""
     theta = 2 * np.pi * np.random.random((2 * nlayers * nqubits,))
     theta_iter = iter(theta)
@@ -105,7 +114,7 @@ def test_variational_layer_fusion(backend, nqubits, nlayers, max_qubits, multiqu
         c.add((gates.CZ(i, i + 1) for i in range(1, nqubits - 1, 2)))
         c.add(gates.CZ(0, nqubits - 1))
 
-    fused_c = c.fuse(max_qubits, multiqubit_first)
+    fused_c = c.fuse(max_qubits)
     if K.name == "qibotf" and max_qubits > 2:
         # ``qibotf`` does not support multi qubit gates
         with pytest.raises(NotImplementedError):
@@ -117,8 +126,7 @@ def test_variational_layer_fusion(backend, nqubits, nlayers, max_qubits, multiqu
 @pytest.mark.parametrize("nqubits", [4, 5])
 @pytest.mark.parametrize("ngates", [10, 20])
 @pytest.mark.parametrize("max_qubits", [2, 3, 4, 5])
-@pytest.mark.parametrize("multiqubit_first", [False, True])
-def test_random_circuit_fusion(backend, nqubits, ngates, max_qubits, multiqubit_first):
+def test_random_circuit_fusion(backend, nqubits, ngates, max_qubits):
     """Check gate fusion in randomly generated circuits."""
     one_qubit_gates = [gates.RX, gates.RY, gates.RZ]
     two_qubit_gates = [gates.CNOT, gates.CZ, gates.SWAP]
@@ -133,7 +141,7 @@ def test_random_circuit_fusion(backend, nqubits, ngates, max_qubits, multiqubit_
         while q0 == q1:
             q0, q1 = np.random.randint(0, nqubits, (2,))
         c.add(gate(q0, q1))
-    fused_c = c.fuse(max_qubits, multiqubit_first)
+    fused_c = c.fuse(max_qubits)
     if K.name == "qibotf" and max_qubits > 2:
         # ``qibotf`` does not support multi qubit gates
         with pytest.raises(NotImplementedError):
@@ -153,7 +161,7 @@ def test_controlled_by_gates_fusion(backend, max_qubits):
     c.add(gates.RX(1, theta=0.1234).controlled_by(0))
     c.add(gates.RX(3, theta=0.4321).controlled_by(2))
     fused_c = c.fuse(max_qubits)
-    if K.name == "qibotf" and max_qubits > 2:
+    if K.name == "qibotf" and max_qubits > 3:
         # ``qibotf`` does not support multi qubit gates
         with pytest.raises(NotImplementedError):
             result = fused_c()

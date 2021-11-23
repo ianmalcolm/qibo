@@ -46,38 +46,7 @@ class Circuit(circuit.AbstractCircuit):
             self._set_nqubits(gate.additional_unitary)
             self.queue.append(gate.additional_unitary)
 
-    @staticmethod
-    def _fuse_queue(current_queue, max_qubits, min_targets):
-        from qibo.gates import FusedGate
-        queue = []
-        for gate in current_queue:
-            if gate.is_special():
-                if isinstance(gate, FusedGate):
-                    queue.append(gate)
-                else:
-                    queue.append(FusedGate(gate))
-            else:
-                available = True
-                for fgate in reversed(queue):
-                    qubits = set(gate.qubits)
-                    if isinstance(fgate, FusedGate):
-                        is_special = fgate.is_special()
-                        if not is_special and len(qubits | fgate.qubit_set) <= max_qubits:
-                            fgate.add(gate)
-                            available = False
-                            break
-                        elif is_special or qubits & fgate.qubit_set:
-                            break
-                    elif qubits & set(fgate.qubits):
-                        break
-                if available:
-                    if not isinstance(gate, FusedGate) and len(gate.qubits) > min_targets:
-                        queue.append(FusedGate(gate))
-                    else:
-                        queue.append(gate)
-        return queue
-
-    def fuse(self, max_qubits=2, multiqubit_first=True):
+    def fuse(self, max_qubits=2):
         """Creates an equivalent circuit with the gates fused up to two-qubits.
 
         Returns:
@@ -100,19 +69,42 @@ class Circuit(circuit.AbstractCircuit):
                 # now ``fused_c`` contains a single ``FusedGate`` that is
                 # equivalent to applying the five original gates
         """
+        from qibo.gates import FusedGate
         from qibo.abstractions.circuit import _Queue
-        if multiqubit_first:
-            ntargets = set(len(gate.qubits) - 1 for gate in self.queue)
-            queue = self.queue
-            for n in reversed(sorted(ntargets)):
-                if n >= 0:
-                    queue = self._fuse_queue(queue, max_qubits, n)
-        else:
-            queue = self._fuse_queue(self.queue, max_qubits, 0)
+
+        gate_targets = {}
+        queue = []
+        for gate in self.queue:
+            fgate = FusedGate(gate)
+            queue.append(fgate)
+            ntargets = len(gate.qubits)
+            if not fgate.is_special() and ntargets <= max_qubits:
+                if ntargets in gate_targets:
+                    gate_targets.get(ntargets).append(fgate)
+                else:
+                    gate_targets[ntargets] = [fgate]
+
+        # round 1
+        for ntargets in reversed(sorted(gate_targets.keys())):
+            for gate in gate_targets.get(ntargets):
+                if gate in queue:
+                    i = queue.index(gate)
+                    left = gate.fuse(queue[:i], ntargets, True)
+                    right = gate.fuse(queue[i + 1:], ntargets, False)
+                    queue = left + [gate] + right
+
+        # round 2
+        for gate in list(queue):
+            if not gate.is_special() and gate in queue:
+                i = queue.index(gate)
+                right = gate.fuse(queue[i + 1:], max_qubits)
+                queue = list(queue[:i + 1])
+                queue.extend(right)
+
         # create a circuit and assign the new queue
         new_circuit = self._shallow_copy()
         new_circuit.queue = _Queue(self.nqubits)
-        new_circuit.queue.extend(fgate if len(fgate) > 1 else fgate[0] for fgate in queue)
+        new_circuit.queue.extend(gate if len(gate) > 1 else gate[0] for gate in queue)
         return new_circuit
 
     def _eager_execute(self, state):
