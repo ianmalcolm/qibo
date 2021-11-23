@@ -26,17 +26,7 @@ def test_two_fusion_gate(max_qubits):
              gates.H(0)]
     c = Circuit(3)
     c.add(queue)
-    print(c.draw())
     c = c.fuse(max_qubits)
-
-    for fgate in c.queue:
-        if isinstance(fgate, gates.FusedGate):
-            for gate in fgate:
-                print(gate.name, gate.qubits)
-        else:
-            print(fgate.name, fgate.qubits)
-        print()
-
     if max_qubits > 2:
         assert len(c.queue) == 1
         assert list(c.queue[0]) == [queue[0], queue[5], queue[1], queue[2],
