@@ -380,7 +380,9 @@ def test_special_gate():
 def test_fused_gate():
     gate = gates.FusedGate(gates.H(0))
     assert gate.target_qubits == (0,)
-    gate.add(gates.CNOT(0, 2))
+    gate = gates.FusedGate(gates.CNOT(0, 2))
     assert gate.target_qubits == (0, 2)
-    gate.add(gates.CZ(1, 3))
+    fgate = gates.FusedGate(gates.CZ(1, 3))
+    queue = gate.fuse([fgate], max_qubits=4)
     assert gate.target_qubits == (0, 1, 2, 3)
+    assert len(queue) == 0

@@ -545,8 +545,8 @@ def test_thermal_relaxation_channel_errors(backend, t1, t2, time, excpop):
 
 def test_fused_gate_construct_unitary(backend):
     gate = gates.FusedGate(gates.H(0))
-    gate.add(gates.H(1))
-    gate.add(gates.CZ(0, 1))
+    gate.gates.extend((gates.H(1), gates.CZ(0, 1)))
+    gate.qubit_set = {0, 1}
     hmatrix = np.array([[1, 1], [1, -1]]) / np.sqrt(2)
     czmatrix = np.diag([1, 1, 1, -1])
     target_matrix = czmatrix @ np.kron(hmatrix, hmatrix)

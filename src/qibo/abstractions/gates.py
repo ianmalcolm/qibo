@@ -1613,6 +1613,6 @@ class FusedGate(Gate):
 
     def _dagger(self):
         dagger = self.__class__(self.gates[-1].dagger())
-        for gate in self.gates[::-1][1:]:
-            dagger.add(gate.dagger())
+        dagger.qubit_set = set(self.qubit_set)
+        dagger.gates.extend(gate.dagger() for gate in self.gates[::-1][1:])
         return dagger
